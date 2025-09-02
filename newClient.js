@@ -177,7 +177,7 @@ async function askModel(prompt, files, modelName, apiKey, history = [], url) {
   // })));
   messages.push(new HumanMessage({
     content: [
-      { type: "text", text: `our current prompt: ${prompt} and dont get confused with previous context` },
+      { type: "text", text:  prompt  },
       ...attachments,
     ],
   }));
