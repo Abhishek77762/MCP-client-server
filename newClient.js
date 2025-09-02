@@ -9,6 +9,7 @@ import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { tool, DynamicStructuredTool } from "@langchain/core/tools";
 import { attachmentsToContent } from "./services.js";
+// import { attachmentsToContent } from "../services.js"; // keep your existing file extraction
 
 
 // let mcpClient = null;
@@ -16,7 +17,7 @@ import { attachmentsToContent } from "./services.js";
 // let currentMCPUrl = null; // track manually
 
 async function connectMCP(url) {
-  let mcpClient=null;
+  let mcpClient = null;
   try {
     console.log("Connecting to MCP at:", url);
     const transport = new StreamableHTTPClientTransport(new URL(url));
@@ -25,7 +26,7 @@ async function connectMCP(url) {
     await mcpClient.connect(transport);
     return { success: true, client: mcpClient };
   } catch (error) {
-    console.error("Error connecting to MCP:", error);
+    console.error("Error connecting to MCP in connect mcp function");
     mcpClient = null;
     return { success: false, error: error.message || error };
   }
@@ -64,6 +65,47 @@ async function getTools(mcpClient) {
       })
   );
 }
+
+
+async function summarizeHistory(messages, summarizerModel) {
+  if (messages.length <= 10) return messages;
+
+  const oldMessages = messages.slice(0, messages.length - 10);
+  const recentMessages = messages.slice(-10);
+
+  // Use a lightweight summarizer model (could even be same model)
+  const summaryPrompt = `Summarize the following conversation briefly, preserving context for future turns:\n\n${oldMessages.map(m => m.text).join("\n")}`;
+
+  const summaryResponse = await summarizerModel.invoke([new HumanMessage(summaryPrompt)]);
+
+  return [
+    new AIMessage({
+      content: `Summary of earlier conversation: ${summaryResponse.content}`,
+    }),
+    ...recentMessages,
+  ];
+}
+
+
+function getSystemPrompt(mcpClient) {
+  if (mcpClient) {
+    return `You are connected to MCP server.
+This MCP provides domain-specific tools. Only use MCP-related responses when the user asks relevant to this server.
+When the user asks questions related to the domain of the MCP server, use the available tools to provide accurate and relevant information.
+DO NOT GET CONFUSED WITH PREVIOUS CONTEXT READ CONTEXT, IF IT IS NECCESARY TO CURRENT PROMPT THEN USE CONTEXT.
+For other general questions, behave like a normal AI assistant.
+if you are connected to mcp and then given mcp specific prompt or any prompt related to mcp then use mcp context but not a error one or where mcp is not connected again try with mcp if previous prompt was for mcp but mcp not connecetd it gives i don't know answer then dont read that context.
+you have to call mcp tools if they are relevant to the prompt.
+`;
+  } else {
+    return `You are NOT connected to any MCP server. Do not reference MCP tools answer generally like llm and say don't know and dont get confused with previous context.
+Just behave like a normal AI assistant.
+DO NOT GET CONFUSED WITH PREVIOUS CONTEXT READ CONTEXT IF IT IS NECCESARY TO CURRENT PROMPT THEN USE CONTEXT.
+if you are given mcp specific prompt or any prompt related to mcp then do not use mcp context just reply like normal llm.
+`;
+  }
+}
+
 
 
 async function askModel(prompt, files, modelName, apiKey, history = [], url) {
@@ -109,7 +151,7 @@ async function askModel(prompt, files, modelName, apiKey, history = [], url) {
     modelWithTools =
       mcpTools.length > 0 ? chatModel.bindTools(mcpTools) : chatModel;
 
-      console.log("Model with tools:", mcpTools.map((tool) => tool.name));
+    console.log("Model with tools:", mcpTools.map((tool) => tool.name));
   }
 
 
@@ -121,13 +163,24 @@ async function askModel(prompt, files, modelName, apiKey, history = [], url) {
     }
   });
 
+  messages = await summarizeHistory(messages, chatModel);
+
+  const systemPrompt = getSystemPrompt(mcpClient);
+  messages.unshift(new AIMessage({ content: systemPrompt }));
+
   const attachments = await attachmentsToContent(files);
-  messages.push(new HumanMessage(new HumanMessage({
+  // messages.push(new HumanMessage(new HumanMessage({
+  //   content: [
+  //     { type: "text", text: prompt },
+  //     ...attachments,
+  //   ],
+  // })));
+  messages.push(new HumanMessage({
     content: [
-      { type: "text", text: prompt },
+      { type: "text", text: `our current prompt: ${prompt} and dont get confused with previous context` },
       ...attachments,
     ],
-  })));
+  }));
 
   const MAX_TURNS = 5;
   for (let i = 0; i < MAX_TURNS; i++) {
