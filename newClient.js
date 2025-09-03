@@ -90,18 +90,23 @@ async function summarizeHistory(messages, summarizerModel) {
 function getSystemPrompt(mcpClient) {
   if (mcpClient) {
     return `You are connected to MCP server.
-This MCP provides domain-specific tools. Only use MCP-related responses when the user asks relevant to this server.
-When the user asks questions related to the domain of the MCP server, use the available tools to provide accurate and relevant information.
-DO NOT GET CONFUSED WITH PREVIOUS CONTEXT READ CONTEXT, IF IT IS NECCESARY TO CURRENT PROMPT THEN USE CONTEXT.
-For other general questions, behave like a normal AI assistant.
-if you are connected to mcp and then given mcp specific prompt or any prompt related to mcp then use mcp context but not a error one or where mcp is not connected again try with mcp if previous prompt was for mcp but mcp not connecetd it gives i don't know answer then dont read that context.
-you have to call mcp tools if they are relevant to the prompt.
+-This MCP provides domain-specific tools. Only use MCP-related responses when the user asks relevant to this server.
+-When the user asks questions related to the domain of the MCP server, use the available tools to provide accurate and relevant information.
+-DO NOT GET CONFUSED WITH PREVIOUS CONTEXT READ CONTEXT, IF IT IS NECCESARY TO CURRENT PROMPT THEN USE CONTEXT.
+-For other general questions, behave like a normal AI assistant.
+-if you are connected to mcp and then given mcp specific prompt or any prompt related to mcp then use mcp context but not a error one or where mcp is not connected again try with mcp if previous prompt was for mcp but mcp not connecetd it gives i don't know answer then dont read that context.
+-you have to call mcp tools if they are relevant to the prompt.
 `;
   } else {
-    return `You are NOT connected to any MCP server. Do not reference MCP tools answer generally like llm and say don't know and dont get confused with previous context.
-Just behave like a normal AI assistant.
-DO NOT GET CONFUSED WITH PREVIOUS CONTEXT READ CONTEXT IF IT IS NECCESARY TO CURRENT PROMPT THEN USE CONTEXT.
-if you are given mcp specific prompt or any prompt related to mcp then do not use mcp context just reply like normal llm.
+    return `If MCP is disconnected:
+    -You are NOT connected to any MCP server. Do not reference MCP tools answer generally like llm and say don't know and dont get confused with previous context.
+-Just behave like a normal AI assistant.
+-DO NOT GET CONFUSED WITH PREVIOUS CONTEXT READ CONTEXT IF IT IS NECCESARY TO CURRENT PROMPT THEN USE CONTEXT.
+-if you are given mcp specific prompt or any prompt related to mcp then do not use mcp context just reply like normal llm.
+- Ignore any prior conversation mentioning MCP tools or servers.
+- Do not assume any tool access.
+- If the user asks for MCP-specific info, respond with "I don’t know."
+- still if you have given prompt for fetching information like current weather or similar, you will have to respond you dont know in llm format.
 `;
   }
 }
@@ -177,7 +182,7 @@ async function askModel(prompt, files, modelName, apiKey, history = [], url) {
   // })));
   messages.push(new HumanMessage({
     content: [
-      { type: "text", text:  prompt  },
+      { type: "text", text: prompt },
       ...attachments,
     ],
   }));
